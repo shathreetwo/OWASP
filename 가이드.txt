@@ -1,0 +1,67 @@
+XAMPP란?
+XAMPP = Apache + MySQL + PHP + Perl의 약자
+
+구성요소	하는 일
+Apache	웹서버: 브라우저에서 localhost로 접속하면 이게 응답
+MySQL	데이터베이스: 회원정보, 게시물 등을 저장
+PHP	웹 프로그램 실행 언어 (DVWA는 PHP로 만들어짐)
+(Perl)	예전 CGI 방식 지원, 대부분은 사용 안 함
+
+✅ 쉽게 말해 XAMPP는…
+내 컴퓨터를 웹서버처럼 만들어주는 올인원 도구예요.
+
+DVWA가 작동하는 원리
+당신이 방금 했던 과정을 이렇게 이해할 수 있어요:
+
+Apache → http://localhost/dvwa 접속 요청 처리
+
+PHP → DVWA의 PHP 코드 실행
+
+MySQL → DVWA가 로그인·회원 정보 등을 데이터베이스에서 불러옴
+
+XAMPP → 위 3가지를 모두 내 PC 안에 한 번에 세팅해줌
+
+✅ 왜 개발자나 보안 실습자들이 XAMPP를 쓰나요?
+설치가 쉽고 가볍다
+
+서버 없이도 내 컴퓨터에서 실습 가능하다
+
+Apache + MySQL + PHP가 한 번에 설치된다
+
+DVWA, WordPress, Laravel, phpMyAdmin 같은 웹 앱을 바로 돌릴 수 있다
+
+🧑‍💻 그리고 당신은 지금…
+XAMPP로 로컬 서버를 구성했고,
+
+DVWA라는 실습용 웹 앱을 설치해서,
+
+SQL Injection 실습을 자기 컴퓨터 안에서 바로 하고 있는 것이에요. 🙌
+
+DVWA란?
+**DVWA(Damn Vulnerable Web Application)**는
+일부러 보안 취약점이 심하게 존재하도록 만들어진 웹 애플리케이션입니다.
+
+즉, 해킹이나 보안 실습을 연습할 수 있도록 일부러 뚫리게 설계된 웹사이트예요.
+
+✅ DVWA의 역할
+역할	설명
+🔓 해킹 실습	SQL Injection, XSS, CSRF 같은 보안 공격 실습 가능
+🛡️ 보안 교육	보안이 왜 필요한지 직접 체험하면서 배울 수 있음
+🧪 취약점 분석	실제 웹 코드에서 어떤 식으로 공격이 일어나는지 분석
+💻 개발자 보안 훈련	보안코딩, 필터링, 방어 기법 학습에 사용됨
+
+
+DVWA 기반 OWASP Top 10
+단계	실습 항목	공격 기법	
+①	SQL Injection	' OR 1=1 -- 등으로 인증 우회	✅ 지금 시작
+②	XSS (Stored/Reflected)	<script>alert(1)</script> 등	
+③	Command Injection	; ls 또는 && whoami	
+④	Brute Force	로그인 반복 시도	
+⑤	CSRF (요청 위조)	자동 요청 공격	
+⑥	File Inclusion	../../etc/passwd	
+⑦	Upload Vulnerability	악성 스크립트 업로드	
+⑧	Insecure CAPTCHA	무력화 시도	
+⑨	JavaScript Vulnerabilities	DOM 기반 공격 등	
+⑩	전체 점검/종합 정리	캡처 + 보고서 + GitHub 업로드	
+
+

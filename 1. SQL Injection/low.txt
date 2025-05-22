@@ -1,0 +1,145 @@
+**SQL Injection(인젝션)**은
+웹 애플리케이션의 입력값을 통해 악의적인 SQL 코드를 삽입해서
+데이터베이스를 조작하거나 정보를 탈취하는 웹 보안 공격 방식입니다.
+
+SELECT * FROM users WHERE id = '$input';
+여기서 $input에 ' OR 1=1 -- 같은 값을 넣으면?
+SELECT * FROM users WHERE id = '' OR 1=1 --';
+
+
+DVWA Security 
+
+오류 기반 SQL Injection (Error-Based SQLi)
+데이터베이스가 발생시킨 에러 메시지를 그대로 사용자에게 보여주는 경우,
+공격자는 그 내용을 통해 쿼리 구조, 컬럼 이름, 테이블 이름, DB 종류 등을 파악할 수 있어요.
+
+## ⚠️ 실습 중 발견된 SQL 오류 메시지
+
+> `'` 단독 입력 시 아래와 같은 SQL 문법 오류가 발생함:
+
+Uncaught mysqli_sql_exception: You have an error in your SQL syntax...
+near ''' at line 1
+
+이 메시지에서 얻을 수 있는 정보
+정보	내용
+DB 종류	MariaDB 사용 중 (MySQL 계열)
+실행 언어	PHP + MySQLi
+입력값 위치	작은따옴표 ' 앞뒤 → 입력값이 '입력값'처럼 들어감
+쿼리 구조 힌트	입력값이 쿼리 내부에서 WHERE user_id = '$input' 형태로 사용된 것 추정
+구문 에러 지점	**'와 **백틱(```)**이 같이 쓰여 문법 오류 발생 (잘못된 쿼리 구성의 흔적)
+
+이걸 통해 어떤 전략을 세울 수 있을까?
+✅ 1. 입력값이 '로 감싸져 있는 걸 확인
+→ 페이로드를 만들 때 ' OR 1=1 -- 같이 닫는 따옴표를 포함시켜야 함
+
+✅ 2. 현재 쿼리에 백틱(``)이 섞여 있음을 추정
+→ SQL에서 컬럼이나 테이블명 감쌀 때 백틱을 쓰므로,
+→ 컬럼명을 직접 조작하려는 시도에서 문제가 생겼을 수도 있음
+
+SQL 인젝션이 가능한 이유
+사용자가 입력한 값이 따옴표(')로 감싸진 상태에서 쿼리에 바로 삽입되면, 입력값에 따옴표와 SQL 구문을 포함해서 쿼리 구조를 바꿀 수 있습니다.
+
+즉, 입력값에 ' OR 1=1 -- 같은 조작된 문자열을 넣으면 쿼리 전체가 변형됩니다.
+
+
+따옴표 닫기: ' 를 입력값에 포함해서 쿼리 문자열 구조를 깨뜨림
+
+조건 조작: OR 1=1 과 같은 항상 참이 되는 조건 삽입
+
+주석 처리: -- 또는 # 를 사용해 뒤에 나오는 원래 쿼리 구문 무시
+
+--하고 띄어쓰기 안하면 오류난다. 
+MariaDB에서 -- 뒤에 반드시 공백이 있어야 주석으로 인식합니다.
+ ' OR 1=1 -- 
+1' OR 1=1 #
+
+
+### 🔍 해석:
+- 사용자 입력값을 SQL 쿼리에 그대로 삽입함으로써
+- 작은따옴표(`'`) 하나만으로도 전체 쿼리 구조가 깨지고 오류가 발생함
+- 해당 메시지는 **공격자에게 내부 SQL 구조를 노출시켜** 공격에 필요한 정보를 제공할 수 있음
+
+### 🛡 대응 방안:
+- 입력값을 SQL에 직접 넣지 않고, Prepared Statement 사용
+- 오류 메시지를 사용자에게 그대로 노출하지 않도록 설정
+
+1. 입력값을 SQL에 직접 넣지 않고 Prepared Statement 사용하기
+왜 필요한가?
+직접 쿼리 문자열에 입력값을 끼워 넣으면 인젝션 위험 발생
+
+Prepared Statement는 쿼리와 데이터(파라미터)를 분리해서 처리하기 때문에, 입력값에 어떤 악성 SQL 구문이 있더라도 그냥 데이터로 취급되어 실행 구조가 변하지 않음
+
+PHP (mysqli) 예시
+php
+복사
+편집
+// DB 연결 (mysqli)
+$conn = new mysqli($host, $user, $pass, $dbname);
+
+// Prepared Statement 생성
+$stmt = $conn->prepare("SELECT first_name FROM users WHERE user_id = ?");
+
+// 파라미터 바인딩 (s = string 타입)
+$stmt->bind_param("s", $input);
+
+// 실행
+$stmt->execute();
+
+// 결과 가져오기
+$result = $stmt->get_result();
+while ($row = $result->fetch_assoc()) {
+    echo $row['first_name'];
+}
+
+$stmt->close();
+$conn->close();
+? 위치에 입력값이 들어가고, DB가 내부적으로 안전하게 처리
+
+장점
+SQL 문법 구조가 변하지 않음
+
+SQL 인젝션 방지에 효과적
+
+2. 오류 메시지를 사용자에게 그대로 노출하지 않도록 설정하기
+왜 필요한가?
+공격자는 오류 메시지를 통해 DB 구조, 테이블명, 쿼리 문법 등을 파악해 공격 고도화
+
+따라서, 오류 내용은 로그에는 남기되 사용자 화면에는 간단한 메시지만 보여야 함
+
+PHP 설정 및 처리 예
+php.ini에서 display_errors를 끄기
+
+ini
+복사
+편집
+display_errors = Off
+또는 코드 내에서 오류 처리
+
+php
+복사
+편집
+mysqli_report(MYSQLI_REPORT_OFF); // mysqli 오류 보고 끄기
+
+$conn = new mysqli($host, $user, $pass, $dbname);
+
+if ($conn->connect_error) {
+    error_log("DB connection failed: " . $conn->connect_error); // 로그 기록
+    echo "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요."; // 사용자 메시지
+    exit;
+}
+
+$result = $conn->query($query);
+if (!$result) {
+    error_log("SQL error: " . $conn->error);
+    echo "처리 중 오류가 발생했습니다.";
+    exit;
+}
+웹서버(아파치, nginx) 설정
+운영 환경에서는 PHP 오류 출력 꺼두고, 로그 파일에만 기록하게 설정
+
+정리
+대응방안	구체 조치 방법
+Prepared Statement 사용	SQL 쿼리에서 파라미터 바인딩 기능 활용, 직접 문자열 삽입 금지
+오류 메시지 노출 제한	PHP 설정에서 오류 화면 출력 끄기, 내부 로그에만 오류 기록, 사용자엔 일반 메시지
+
+

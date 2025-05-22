@@ -1,0 +1,85 @@
+항목 번호	이름	설명
+A01	Broken Access Control	권한이 없는 사용자가 관리자 기능에 접근하는 문제
+A02	Cryptographic Failures	암호화 미비, 민감 정보 노출 등
+A03	Injection	SQL Injection, Command Injection 등
+A04	Insecure Design	설계 단계에서의 보안 미비 (예: 인증 누락)
+A05	Security Misconfiguration	서버 설정 오류, 기본 비밀번호 방치 등
+A06	Vulnerable and Outdated Components	오래된 라이브러리 사용, 취약한 모듈 포함
+A07	Identification and Authentication Failures	로그인·인증 관련 문제
+A08	Software and Data Integrity Failures	소프트웨어 무결성 미확인, 서명 검증 누락 등
+A09	Security Logging and Monitoring Failures	보안 로그 미작성, 이상행위 탐지 불가
+A10	Server-Side Request Forgery (SSRF)	서버가 공격자의 요청을 대신 수행하게 하는 공격
+
+1단계. 실습 환경 준비하기
+🔧 실습에 필요한 것
+도구	설명
+DVWA	실습용 웹 해킹 환경 (설치 쉬움)
+XAMPP or Docker	로컬에서 웹서버 실행
+웹 브라우저 (Chrome)	입력창 테스트
+(선택) Burp Suite	HTTP 요청 분석 도구
+
+1-1. DVWA 설치하기 (가장 쉬운 방법: XAMPP)
+Windows 사용자 기준 설치법
+
+XAMPP 다운로드
+→ 설치 후 Apache, MySQL 실행
+
+DVWA GitHub에서 ZIP 다운로드
+→ 압축 해제 후 C:\xampp\htdocs\dvwa 폴더에 넣기
+
+브라우저에서 접속
+🔗 http://localhost/dvwa/setup.php
+→ 처음에 DB 설정 버튼 클릭하면 자동 설치됨
+
+로그인
+
+아이디: admin
+
+비밀번호: password
+
+보안 레벨을 Low로 설정
+→ DVWA Security 메뉴에서 변경 가능
+
+
+-----오류발생-----
+오후 2:58:32  [mysql] 	Status change detected: stopped
+오후 2:58:32  [mysql] 	Error: MySQL shutdown unexpectedly.
+오후 2:58:32  [mysql] 	This may be due to a blocked port, missing dependencies, 
+오후 2:58:32  [mysql] 	improper privileges, a crash, or a shutdown by another method.
+오후 2:58:32  [mysql] 	Press the Logs button to view error logs and check
+오후 2:58:32  [mysql] 	the Windows Event Viewer for more clues
+오후 2:58:32  [mysql] 	If you need more help, copy and post this
+오후 2:58:32  [mysql] 	entire log window on the forums
+
+1. xampp에서 mysql이 실행되지 않고 갑자기 꺼짐.
+
+아마 기존에 깔아둔 mysql이랑 출돌한거같은데
+설정파일에서 3306 -> 3307로 포트번호 변경
+해결.
+
+DVWA System error - config file not found. Copy config/config.inc.php.dist to config/config.inc.php and configure to your environment.
+
+2. **DVWA 설정 파일(config.inc.php)**이 아직 생성되지 않아서 생긴 정상적인 초기 메시지
+C:\xampp\htdocs\dvwa\config\에서 config.inc.php.dist복사 config.inc.php 로 이름바꿔서 붙여넣기
+해결.
+
+Fatal error: Uncaught mysqli_sql_exception: Access denied for user 'dvwa'@'localhost' (using password: YES) in C:\xampp\htdocs\dvwa\dvwa\includes\dvwaPage.inc.php:569 Stack trace: #0 C:\xampp\htdocs\dvwa\dvwa\includes\dvwaPage.inc.php(569): mysqli_connect('127.0.0.1', 'dvwa', Object(SensitiveParameterValue), '', '3306') #1 C:\xampp\htdocs\dvwa\login.php(8): dvwaDatabaseConnect() #2 {main} thrown in C:\xampp\htdocs\dvwa\dvwa\includes\dvwaPage.inc.php on line 569
+
+3. http://localhost/dvwa/login.php로 접속 안됨.
+C:\xampp\htdocs\dvwa\config\config.inc.php에서 db 계정정보 수정
+
+$_DVWA[ 'db_user' ] = 'dvwa';
+$_DVWA[ 'db_password' ] = 'p@ssw0rd';
+이 부분을 다음과 같이 수정합니다 (XAMPP 기본 설정 기준):
+
+$_DVWA[ 'db_user' ] = 'root';
+$_DVWA[ 'db_password' ] = '';
+
+..? 안되네 
+기존에 있는 mysql이랑 충돌난건가
+
+다 끄고 작업관리자에서 mysql 프로세스 종료. 
+다시 켜기. 
+config.inc.php에서 포트번호가 3306으로 되어있었다. 3307로 변경. 
+해결.
+
