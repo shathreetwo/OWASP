@@ -1,0 +1,94 @@
+클릭해서 나오는 창에 ID를 입력하는 구조다. 
+간단하게 몇가지 넣어봤는데 오류뜬 상태에서 입력창을 지우니 안들어가지는 오류가 발생했다. 
+정확히는 SQL INJECTTION 버튼을 누르면 오류창으로 연결되는 오류.
+
+세션에 저장된 id 값이 잘못된 형태다.
+아마 이전 공격 시도에서 세션에 'a'='a' 같은 값을 넣었고, 서버가 그대로 사용해서 에러 발생.
+
+세션을 초기화해야 한다.
+PHP 세션에 저장된 id 값을 삭제하거나 새로 초기화하면 해결될 수 있습니다.
+
+쿠키 삭제로는 해결되지 않아서 
+
+ PHP 코드로 세션 초기화 (임시 조치)
+DVWA 설치 경로에 있는 high.php 파일 맨 위에 아래 코드를 넣어 세션 초기화 후 새로 id를 받도록 할 수 있습니다:
+
+php
+복사
+편집
+<?php
+session_start();
+// 세션 초기화
+unset($_SESSION['id']);
+
+// id 값 새로 받기
+if (isset($_REQUEST['id'])) {
+    $_SESSION['id'] = $_REQUEST['id'];
+}
+?>
+
+DVWA의 SQL Injection - High 보안 수준은 Low/Medium과는 다르게 GET/POST 파라미터가 아닌 세션 변수를 통해 사용자 입력을 받기 때문에, Burp Suite 같은 도구로 세션 변조를 통해 SQL Injection을 시도해야 합니다.
+
+세션(Session) 은 어디에 저장되는가?
+세션 데이터 자체는 서버에 저장됩니다.
+
+클라이언트(브라우저)에는 세션 ID만 저장됩니다. 이 세션 ID는 일반적으로 쿠키 (PHPSESSID) 에 저장되어 서버로 전송됩니다.
+
+🔐 그래서 클라이언트가 세션을 건드릴 수 있는가?
+직접적인 세션 데이터 조작은 클라이언트에서 불가능합니다.
+클라이언트는 오직 세션 ID (예: PHPSESSID=abc123) 를 가질 뿐이고, 이 값이 서버에 어떤 데이터를 연결하는지만 결정합니다.
+
+하지만 클라이언트가 세션 ID를 바꾸거나 조작할 수는 있습니다.
+예: 쿠키 수정, 세션 탈취, Burp Suite에서 PHPSESSID 값 변경 등
+
+즉, 세션 데이터는 로컬에서 조작할 수 없지만,
+세션을 가리키는 “열쇠”(세션 ID)는 조작 가능합니다.
+
+
+🔓 보안상 중요한 포인트
+세션 고정 공격 (Session Fixation):
+사용자가 로그인하기 전에 미리 세션 ID를 고정시켜서, 인증 후 그 세션을 공격자가 사용하는 방식.
+
+세션 하이재킹 (Session Hijacking):
+사용자의 세션 ID를 탈취해서 사용자의 권한을 빼앗는 공격.
+
+🧪 DVWA에서 SQL Injection의 목표
+보안 테스트 실습에서 DVWA를 이용할 때 레벨별 목표는 다음과 같아요:
+
+보안 레벨	목표
+Low	SQL 인젝션 가능 여부 확인, 전체 유저 정보 탈취
+Medium	URL 파라미터 외 POST나 쿠키로 전달되는 값 조작
+High	우회 방식 사용, 세션 이용, 필터 우회
+Impossible	실제 방어 구현 확인 (Prepared Statements 사용 등)
+
+-1%27%20UNION%20SELECT%20user,password%20FROM%20users%20--%20
+
+우회 방법: 문자 인젝션 차단 우회 (Bypass)
+🔧 방법 1: 문자 인코딩 우회 (URL 인코딩)
+http
+복사
+편집
+id=-1%27%20UNION%20SELECT%20user,password%20FROM%20users%20--%20&Submit=Submit
+변환 전:
+
+diff
+복사
+편집
+-1' UNION SELECT user,password FROM users -- 
+URL 인코딩 결과:
+
+perl
+복사
+편집
+-1%27%20UNION%20SELECT%20user,password%20FROM%20users%20--%20
+🔎 설명:
+
+%27 = '
+
+%20 = 공백
+
+--%20 = 주석 + 공백 (MySQL에서 주석 뒤에 공백 필수)
+
+이걸 브라우저 주소창에 붙여도 되고, Burp Suite나 DevTools로 전송해도 됩니다.
+
+
