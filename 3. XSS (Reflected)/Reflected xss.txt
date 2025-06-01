@@ -1,0 +1,89 @@
+Reflected XSS (반사형 XSS)
+📌 위치:
+DVWA 메뉴 > XSS (Reflected)
+
+💡 개념:
+사용자의 입력이 URL 등에 포함되어 즉시 반응하고, 결과가 웹 페이지에 되돌아와 반영되는 구조
+
+🧪 테스트 입력:
+php-template
+<script>alert('XSS')</script>
+✅ 정상적으로 알림 창(alert)이 뜨면 성공입니다!
+
+
+Stored XSS (저장형 XSS)
+📌 위치:
+DVWA 메뉴 > XSS (Stored)
+
+💡 개념:
+사용자의 악성 스크립트가 서버에 저장되고, 이후 다른 사용자가 페이지 접속 시 자동 실행됨
+
+🧪 예시 입력:
+이름(name) 입력란:
+홍길동
+
+메시지(message) 입력란:
+<script>alert('저장형 XSS')</script>
+
+✅ 메시지 리스트에 뜨는 홍길동 항목 클릭 시 alert가 뜨면 성공입니다.
+
+XSS 필터 우회 (Medium / High 난이도)
+💡 문제:
+<나 > 같은 특수 문자를 필터링하여 단순한 <script> 코드가 막힘
+
+🛠️ 우회 방법 예시:
+html
+<img src=x onerror=alert('xss')>
+또는
+
+html
+<script>/*XSS*/alert(String.fromCharCode(88,83,83))</script>
+
+
+구분	Reflected XSS	Stored XSS
+서버 저장 여부	❌ 저장되지 않음	✅ 서버(DB)에 저장됨
+동작 시점	사용자가 악성 URL 클릭할 때마다 실행	저장된 페이지에 접속할 때마다 실행
+공격 방식	URL 등으로 공격 코드 전달 (GET 방식 등)	게시판, 댓글, 메시지 등으로 주입
+위험성	단발성, 유도 필요	지속적, 다수 피해 가능
+실습 위치 (DVWA)	XSS (Reflected)	XSS (Stored)
+
+ 정리: 필터 우회 전략
+전략	설명
+태그 변경	<script> → <img>, <svg>, <iframe> 등
+이벤트 속성 활용	onerror, onload, onclick 등 사용
+인코딩 우회	%3Cscript%3E 같은 URL 인코딩 우회
+JS 스킴 활용	javascript: 스킴으로 XSS 유도
+
+**"스킴(Scheme)"**은 웹 주소(=URL)에서 어떤 방식으로 자원을 접근할 것인지를 정의하는 부분입니다. 쉽게 말해, URL의 맨 앞부분에 나오는 "http", "https", "ftp" 같은 걸 말해요.
+
+DOM = Document Object Model
+웹 페이지(HTML 문서)를 자바스크립트로 조작할 수 있게 만들어주는 객체 구조예요.
+
+쉽게 말하면, 브라우저가 HTML을 해석해서 트리 구조로 만든 것이라고 생각하면 됩니다.
+
+📄 예시 HTML
+html
+복사
+편집
+<html>
+  <body>
+    <h1>안녕하세요</h1>
+    <p id="text">여기에 텍스트가 있어요</p>
+  </body>
+</html>
+이 HTML 문서가 브라우저에 로딩되면, 자바스크립트로 이런 식으로 접근할 수 있어요:
+
+javascript
+복사
+편집
+document.getElementById("text").innerHTML = "변경된 텍스트!";
+
+DOM 구조 간단 요약
+DOM 속성/객체	설명
+document	웹 문서 전체 (HTML 전체)
+document.body	<body> 태그 내부
+document.cookie	현재 페이지의 쿠키 정보
+document.location	현재 페이지의 주소 (URL)
+document.forms[0]	첫 번째 <form> 태그
+element.innerHTML	요소 안의 HTML 내용
+element.value	<input>이나 <textarea> 값
