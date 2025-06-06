@@ -37,6 +37,9 @@ DVWA GitHub에서 ZIP 다운로드
 
 비밀번호: password
 
+INSERT INTO users (first_name, last_name, user, password, avatar)
+VALUES ('Eve', 'Hacker', 'attacker', 'attacker', 'avatars/unknown.jpg');
+
 보안 레벨을 Low로 설정
 → DVWA Security 메뉴에서 변경 가능
 
@@ -128,3 +131,17 @@ network.proxy.allow_hijacking_localhost = true는
 
 💡 만약 이 설정을 바꾸기 싫다면,
 아예 localhost 대신 dvwa.local 같은 가짜 도메인 등록을 추천드린 거예요. (그렇게 하면 애초에 프록시 우회를 피할 수 있습니다)
+
+
+사용자 추가 
+
+mysql -u root
+로 접속
+USE dvwa;
+INSERT INTO users (first_name, last_name, user, password, avatar)
+VALUES ('Eve', 'Hacker', 'attacker', 'attacker', 'avatars/unknown.jpg');
+비번이 평문으로 저장되서 로그인 실패
+
+DELETE FROM users WHERE user='attacker';  -- 기존 계정 삭제
+INSERT INTO users (first_name, last_name, user, password, avatar)
+VALUES ('Eve', 'Hacker', 'attacker', MD5('attacker'), 'avatars/unknown.jpg');

